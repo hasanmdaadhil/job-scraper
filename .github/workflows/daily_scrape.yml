@@ -30,11 +30,11 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS }}
-          JOB_LOCATION: ${{ vars.JOB_LOCATION }}
           COUNTRY_INDEED: ${{ vars.COUNTRY_INDEED }}
           IS_REMOTE: ${{ vars.IS_REMOTE }}
-          RESULTS_PER_SITE: ${{ vars.RESULTS_PER_SITE }}
+          RESULTS_PER_KW: ${{ vars.RESULTS_PER_KW }}
           MAX_SLACK_JOBS: ${{ vars.MAX_SLACK_JOBS }}
+          HOURS_OLD: ${{ vars.HOURS_OLD }}
         run: python job_scraper.py
 
       - name: Commit updated seen_jobs.json

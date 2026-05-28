@@ -1,21 +1,57 @@
 #!/usr/bin/env python3
 import os
 import json
+import time
 import requests
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
 from jobspy import scrape_jobs
 
-KEYWORDS = os.environ.get("JOB_KEYWORDS", "software engineer")
-LOCATION = os.environ.get("JOB_LOCATION", "")
+# --- Config from env ---
+KEYWORDS_RAW = os.environ.get("JOB_KEYWORDS", "meta ads")
+KEYWORDS_LIST = [k.strip() for k in KEYWORDS_RAW.split(",") if k.strip()]
 COUNTRY_INDEED = os.environ.get("COUNTRY_INDEED", "india")
 IS_REMOTE = os.environ.get("IS_REMOTE", "true").lower() == "true"
-RESULTS_PER_SITE = int(os.environ.get("RESULTS_PER_SITE", "25"))
+RESULTS_PER_KW = int(os.environ.get("RESULTS_PER_KW", "10"))
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK_URL")
-MAX_SLACK_JOBS = int(os.environ.get("MAX_SLACK_JOBS", "10"))
+MAX_SLACK_JOBS = int(os.environ.get("MAX_SLACK_JOBS", "15"))
+HOURS_OLD = int(os.environ.get("HOURS_OLD", "26"))
 SEEN_FILE = Path("seen_jobs.json")
-SEEN_LIMIT = 2000
+SEEN_LIMIT = 5000
+
+# --- Tier-1: title must contain one of these (direct match) ---
+RELEVANT_TITLE_TERMS = [
+    "meta ads", "facebook ads", "instagram ads", "paid social",
+    "google ads", "adwords", "ppc", "paid search", "paid media",
+    "performance marketing", "performance marketer",
+    "media buyer", "media buying",
+    "digital advertising", "biddable",
+    "sem specialist", "sem manager", "sem executive",
+]
+
+# --- Tier-2: "digital marketing" titles pass only if description mentions one of these ---
+PAID_ADS_DESCRIPTION_SIGNALS = [
+    "meta ads", "facebook ads", "instagram ads", "paid social",
+    "google ads", "adwords", "ppc", "paid search", "paid media",
+    "performance marketing", "media buying", "digital advertising",
+]
+
+# --- Agency signals in description: exclude if any match ---
+AGENCY_DESCRIPTION_SIGNALS = [
+    "our clients", "for our clients", "for clients", "client accounts",
+    "manage client", "portfolio of clients", "working with clients",
+    "client campaigns", "client budgets", "on behalf of clients",
+    "multiple clients", "agency environment", "client-facing",
+    "client servicing", "handle client", "serve clients",
+]
+
+# --- Agency signals in company name: exclude if any match ---
+AGENCY_COMPANY_TERMS = [
+    " agency", "media agency", "marketing agency", "digital agency",
+    "advertising agency", "ad agency", "consultancy", " consulting",
+    "media solutions", "marketing solutions",
+]
 
 
 def load_seen() -> set:
@@ -25,11 +61,55 @@ def load_seen() -> set:
 
 
 def save_seen(seen: set) -> None:
-    trimmed = list(seen)[-SEEN_LIMIT:]
-    SEEN_FILE.write_text(json.dumps(trimmed))
+    SEEN_FILE.write_text(json.dumps(list(seen)[-SEEN_LIMIT:]))
 
 
-def build_slack_payload(jobs_df) -> dict:
+def is_relevant(job) -> bool:
+    title = str(job.get("title", "")).lower()
+    description = str(job.get("description", "")).lower()
+    company = str(job.get("company", "")).lower()
+
+    tier1_match = any(term in title for term in RELEVANT_TITLE_TERMS)
+    is_digital_marketing_title = "digital marketing" in title
+
+    if tier1_match:
+        pass  # direct match — proceed to agency check
+    elif is_digital_marketing_title:
+        # Accept only if description explicitly mentions paid ads work
+        if not any(sig in description for sig in PAID_ADS_DESCRIPTION_SIGNALS):
+            return False
+    else:
+        return False  # not a paid ads role
+
+    if any(signal in description for signal in AGENCY_DESCRIPTION_SIGNALS):
+        return False
+
+    if any(term in company for term in AGENCY_COMPANY_TERMS):
+        return False
+
+    return True
+
+
+def scrape_keyword(keyword: str, site: str) -> pd.DataFrame:
+    try:
+        kwargs = dict(
+            site_name=[site],
+            search_term=keyword,
+            is_remote=IS_REMOTE,
+            results_wanted=RESULTS_PER_KW,
+            hours_old=HOURS_OLD,
+        )
+        if site == "indeed":
+            kwargs["country_indeed"] = COUNTRY_INDEED
+        df = scrape_jobs(**kwargs)
+        print(f"  [{site}] '{keyword}': {len(df)} raw")
+        return df
+    except Exception as e:
+        print(f"  [{site}] '{keyword}': failed — {e}")
+        return pd.DataFrame()
+
+
+def build_slack_payload(jobs_df, total_raw: int) -> dict:
     date_str = datetime.now().strftime("%b %d, %Y")
     total = len(jobs_df)
     extra = max(0, total - MAX_SLACK_JOBS)
@@ -37,14 +117,18 @@ def build_slack_payload(jobs_df) -> dict:
     blocks = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": f"Job Alerts — {date_str}"},
+            "text": {"type": "plain_text", "text": f"Paid Ads Job Alerts — {date_str}"},
         },
         {
             "type": "context",
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": f"*{total}* new {'remote ' if IS_REMOTE else ''}listings for *{KEYWORDS}* · {COUNTRY_INDEED.title()} Indeed",
+                    "text": (
+                        f"*{total}* relevant brand jobs found "
+                        f"(filtered from {total_raw} raw) · "
+                        f"Remote · {COUNTRY_INDEED.title()} Indeed"
+                    ),
                 }
             ],
         },
@@ -56,7 +140,8 @@ def build_slack_payload(jobs_df) -> dict:
         company = str(job.get("company", "N/A"))
         location = str(job.get("location", "")).strip() or "Remote"
         url = str(job.get("job_url", "")).strip()
-        site = str(job.get("site", "")).capitalize()
+        date_posted = job.get("date_posted")
+        posted_str = f" · Posted {date_posted}" if pd.notna(date_posted) and date_posted else ""
 
         salary = ""
         min_amt, max_amt = job.get("min_amount"), job.get("max_amount")
@@ -70,7 +155,7 @@ def build_slack_payload(jobs_df) -> dict:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*{title_text}*\n{company} · {location}{salary} · _{site}_",
+                    "text": f"*{title_text}*\n{company} · {location}{salary}{posted_str}",
                 },
             }
         )
@@ -86,12 +171,12 @@ def build_slack_payload(jobs_df) -> dict:
     return {"blocks": blocks}
 
 
-def send_to_slack(jobs_df) -> None:
+def send_to_slack(jobs_df, total_raw: int) -> None:
     if not SLACK_WEBHOOK:
         print("SLACK_WEBHOOK_URL not set — skipping Slack")
         return
 
-    payload = build_slack_payload(jobs_df)
+    payload = build_slack_payload(jobs_df, total_raw)
     resp = requests.post(SLACK_WEBHOOK, json=payload, timeout=10)
     if resp.status_code == 200:
         print(f"Slack: sent {min(len(jobs_df), MAX_SLACK_JOBS)} jobs")
@@ -99,52 +184,51 @@ def send_to_slack(jobs_df) -> None:
         print(f"Slack error {resp.status_code}: {resp.text}")
 
 
-def scrape_site(site: str) -> pd.DataFrame:
-    try:
-        kwargs = dict(
-            site_name=[site],
-            search_term=KEYWORDS,
-            location=LOCATION if LOCATION else None,
-            is_remote=IS_REMOTE,
-            results_wanted=RESULTS_PER_SITE,
-            hours_old=26,
-        )
-        if site == "indeed":
-            kwargs["country_indeed"] = COUNTRY_INDEED
-        df = scrape_jobs(**kwargs)
-        print(f"  {site}: {len(df)} jobs")
-        return df
-    except Exception as e:
-        print(f"  {site}: failed — {e}")
-        return pd.DataFrame()
-
-
 def main() -> None:
-    # Ensure file exists so git can always track it
     if not SEEN_FILE.exists():
         SEEN_FILE.write_text("[]")
 
-    print(f"[{datetime.now():%Y-%m-%d %H:%M}] keywords='{KEYWORDS}' country='{COUNTRY_INDEED}' remote={IS_REMOTE}")
+    print(
+        f"[{datetime.now():%Y-%m-%d %H:%M}] "
+        f"keywords={len(KEYWORDS_LIST)} · country='{COUNTRY_INDEED}' · remote={IS_REMOTE}"
+    )
+    print(f"Keywords: {', '.join(KEYWORDS_LIST)}")
 
-    frames = [scrape_site(s) for s in ["indeed", "naukri"]]
-    jobs = pd.concat([f for f in frames if not f.empty], ignore_index=True) if any(not f.empty for f in frames) else pd.DataFrame()
+    # Scrape every keyword × site with a small delay to avoid rate limits
+    all_frames = []
+    for keyword in KEYWORDS_LIST:
+        for site in ["indeed", "naukri"]:
+            df = scrape_keyword(keyword, site)
+            all_frames.append(df)
+            time.sleep(1)
 
-    print(f"Fetched: {len(jobs)} jobs total")
-
-    if jobs.empty:
-        print("No jobs returned from any site")
+    if not any(not f.empty for f in all_frames):
+        print("No jobs returned from any keyword/site")
         return
 
-    seen = load_seen()
-    new_jobs = jobs[~jobs["id"].isin(seen)].dropna(subset=["id"]).copy()
+    # Combine and deduplicate by job ID
+    combined = pd.concat([f for f in all_frames if not f.empty], ignore_index=True)
+    combined = combined.drop_duplicates(subset=["id"]).dropna(subset=["id"])
+    print(f"\nTotal raw (deduped): {len(combined)}")
 
+    # Apply relevance + agency filters
+    filtered = combined[combined.apply(is_relevant, axis=1)].copy()
+    print(f"After relevance + agency filter: {len(filtered)}")
+
+    if filtered.empty:
+        print("No matching jobs after filtering")
+        return
+
+    # Deduplicate against seen
+    seen = load_seen()
+    new_jobs = filtered[~filtered["id"].isin(seen)].copy()
     print(f"New (unseen): {len(new_jobs)}")
 
     if new_jobs.empty:
         print("No new jobs today")
         return
 
-    send_to_slack(new_jobs)
+    send_to_slack(new_jobs, total_raw=len(combined))
 
     seen.update(new_jobs["id"].astype(str).tolist())
     save_seen(seen)
