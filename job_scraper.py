@@ -18,7 +18,7 @@ SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK_URL")
 MAX_SLACK_JOBS = int(os.environ.get("MAX_SLACK_JOBS", "15"))
 HOURS_OLD = int(os.environ.get("HOURS_OLD", "26"))
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-NOTION_DB_ID = "362597e1da6880ae99bcf1b119f8ddaf"  # Part Times database
+NOTION_DS_ID = "362597e1da6880c9b922000b20b90b02"  # Part Time Job Application data source
 SEEN_FILE = Path("seen_jobs.json")
 SEEN_LIMIT = 5000
 
@@ -215,9 +215,12 @@ def add_to_notion(job) -> bool:
         headers={
             "Authorization": f"Bearer {NOTION_TOKEN}",
             "Content-Type": "application/json",
-            "Notion-Version": "2022-06-28",
+            "Notion-Version": "2025-09-03",
         },
-        json={"parent": {"database_id": NOTION_DB_ID}, "properties": props},
+        json={
+            "parent": {"type": "data_source_id", "data_source_id": NOTION_DS_ID},
+            "properties": props,
+        },
         timeout=10,
     )
     if resp.status_code != 200:
