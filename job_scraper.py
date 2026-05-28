@@ -111,77 +111,54 @@ def scrape_keyword(keyword: str, site: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def build_slack_payload(jobs_df, total_raw: int) -> dict:
-    date_str = datetime.now().strftime("%b %d, %Y")
-    total = len(jobs_df)
-    extra = max(0, total - MAX_SLACK_JOBS)
+NOTION_PAGE_URL = "https://www.notion.so/362597e1da6880ae99bcf1b119f8ddaf"
 
+
+def build_slack_summary(notion_count: int, total_raw: int, filtered: int) -> dict:
+    date_str = datetime.now().strftime("%b %d, %Y")
     blocks = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": f"Paid Ads Job Alerts — {date_str}"},
+            "text": {"type": "plain_text", "text": f"📋 Daily Job Report — {date_str}"},
+        },
+        {"type": "divider"},
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Jobs added to Notion*\n✅ {notion_count}"},
+                {"type": "mrkdwn", "text": f"*After filters*\n🔍 {filtered} of {total_raw} raw"},
+            ],
         },
         {
-            "type": "context",
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Keywords:* {', '.join(KEYWORDS_LIST)}\n*Source:* {COUNTRY_INDEED.title()} Indeed · Remote only",
+            },
+        },
+        {
+            "type": "actions",
             "elements": [
                 {
-                    "type": "mrkdwn",
-                    "text": (
-                        f"*{total}* relevant brand jobs found "
-                        f"(filtered from {total_raw} raw) · "
-                        f"Remote · {COUNTRY_INDEED.title()} Indeed"
-                    ),
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "View in Notion →"},
+                    "url": NOTION_PAGE_URL,
+                    "style": "primary",
                 }
             ],
         },
-        {"type": "divider"},
     ]
-
-    for _, job in jobs_df.head(MAX_SLACK_JOBS).iterrows():
-        title = str(job.get("title", "N/A"))
-        company = str(job.get("company", "N/A"))
-        location = str(job.get("location", "")).strip() or "Remote"
-        url = str(job.get("job_url", "")).strip()
-        date_posted = job.get("date_posted")
-        posted_str = f" · Posted {date_posted}" if pd.notna(date_posted) and date_posted else ""
-
-        salary = ""
-        min_amt, max_amt = job.get("min_amount"), job.get("max_amount")
-        if pd.notna(min_amt) and pd.notna(max_amt) and min_amt and max_amt:
-            currency = job.get("currency", "")
-            salary = f" · {currency}{int(min_amt)}–{int(max_amt)}"
-
-        title_text = f"<{url}|{title}>" if url else title
-        blocks.append(
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*{title_text}*\n{company} · {location}{salary}{posted_str}",
-                },
-            }
-        )
-
-    if extra > 0:
-        blocks.append(
-            {
-                "type": "context",
-                "elements": [{"type": "mrkdwn", "text": f"_+{extra} more jobs not shown_"}],
-            }
-        )
-
     return {"blocks": blocks}
 
 
-def send_to_slack(jobs_df, total_raw: int) -> None:
+def send_to_slack(notion_count: int, total_raw: int, filtered: int) -> None:
     if not SLACK_WEBHOOK:
         print("SLACK_WEBHOOK_URL not set — skipping Slack")
         return
-
-    payload = build_slack_payload(jobs_df, total_raw)
+    payload = build_slack_summary(notion_count, total_raw, filtered)
     resp = requests.post(SLACK_WEBHOOK, json=payload, timeout=10)
     if resp.status_code == 200:
-        print(f"Slack: sent {min(len(jobs_df), MAX_SLACK_JOBS)} jobs")
+        print(f"Slack: summary sent ({notion_count} jobs)")
     else:
         print(f"Slack error {resp.status_code}: {resp.text}")
 
@@ -228,13 +205,6 @@ def add_to_notion(job) -> bool:
     return resp.status_code == 200
 
 
-def post_to_notion(jobs_df) -> None:
-    if not NOTION_TOKEN:
-        print("NOTION_TOKEN not set — skipping Notion")
-        return
-    ok = sum(add_to_notion(job) for _, job in jobs_df.iterrows())
-    print(f"Notion: added {ok}/{len(jobs_df)} rows")
-
 
 def main() -> None:
     if not SEEN_FILE.exists():
@@ -280,8 +250,10 @@ def main() -> None:
         print("No new jobs today")
         return
 
-    send_to_slack(new_jobs, total_raw=len(combined))
-    post_to_notion(new_jobs)
+    notion_count = sum(add_to_notion(job) for _, job in new_jobs.iterrows())
+    print(f"Notion: added {notion_count}/{len(new_jobs)} rows")
+
+    send_to_slack(notion_count=notion_count, total_raw=len(combined), filtered=len(filtered))
 
     seen.update(new_jobs["id"].astype(str).tolist())
     save_seen(seen)
