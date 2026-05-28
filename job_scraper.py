@@ -9,6 +9,8 @@ from jobspy import scrape_jobs
 
 KEYWORDS = os.environ.get("JOB_KEYWORDS", "software engineer")
 LOCATION = os.environ.get("JOB_LOCATION", "")
+COUNTRY_INDEED = os.environ.get("COUNTRY_INDEED", "india")
+IS_REMOTE = os.environ.get("IS_REMOTE", "true").lower() == "true"
 RESULTS_PER_SITE = int(os.environ.get("RESULTS_PER_SITE", "25"))
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK_URL")
 MAX_SLACK_JOBS = int(os.environ.get("MAX_SLACK_JOBS", "10"))
@@ -42,7 +44,7 @@ def build_slack_payload(jobs_df) -> dict:
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": f"*{total}* new listings for *{KEYWORDS}*{' in ' + LOCATION if LOCATION else ''}",
+                    "text": f"*{total}* new {'remote ' if IS_REMOTE else ''}listings for *{KEYWORDS}* · {COUNTRY_INDEED.title()} Indeed",
                 }
             ],
         },
@@ -99,13 +101,17 @@ def send_to_slack(jobs_df) -> None:
 
 def scrape_site(site: str) -> pd.DataFrame:
     try:
-        df = scrape_jobs(
+        kwargs = dict(
             site_name=[site],
             search_term=KEYWORDS,
             location=LOCATION if LOCATION else None,
+            is_remote=IS_REMOTE,
             results_wanted=RESULTS_PER_SITE,
             hours_old=26,
         )
+        if site == "indeed":
+            kwargs["country_indeed"] = COUNTRY_INDEED
+        df = scrape_jobs(**kwargs)
         print(f"  {site}: {len(df)} jobs")
         return df
     except Exception as e:
@@ -118,7 +124,7 @@ def main() -> None:
     if not SEEN_FILE.exists():
         SEEN_FILE.write_text("[]")
 
-    print(f"[{datetime.now():%Y-%m-%d %H:%M}] keywords='{KEYWORDS}' location='{LOCATION or 'any'}'")
+    print(f"[{datetime.now():%Y-%m-%d %H:%M}] keywords='{KEYWORDS}' country='{COUNTRY_INDEED}' remote={IS_REMOTE}")
 
     frames = [scrape_site(s) for s in ["indeed", "naukri"]]
     jobs = pd.concat([f for f in frames if not f.empty], ignore_index=True) if any(not f.empty for f in frames) else pd.DataFrame()

@@ -31,6 +31,8 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS }}
           JOB_LOCATION: ${{ vars.JOB_LOCATION }}
+          COUNTRY_INDEED: ${{ vars.COUNTRY_INDEED }}
+          IS_REMOTE: ${{ vars.IS_REMOTE }}
           RESULTS_PER_SITE: ${{ vars.RESULTS_PER_SITE }}
           MAX_SLACK_JOBS: ${{ vars.MAX_SLACK_JOBS }}
         run: python job_scraper.py
