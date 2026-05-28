@@ -1,0 +1,42 @@
+name: Daily Job Scraper
+
+on:
+  schedule:
+    - cron: '30 2 * * *'  # 8:00 AM IST (UTC+5:30) every day
+  workflow_dispatch:       # allows manual trigger from GitHub UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run job scraper
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS }}
+          JOB_LOCATION: ${{ vars.JOB_LOCATION }}
+          RESULTS_PER_SITE: ${{ vars.RESULTS_PER_SITE }}
+          MAX_SLACK_JOBS: ${{ vars.MAX_SLACK_JOBS }}
+        run: python job_scraper.py
+
+      - name: Commit updated seen_jobs.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add seen_jobs.json
+          git diff --staged --quiet || git commit -m "chore: update seen jobs cache [skip ci]"
+          git push
