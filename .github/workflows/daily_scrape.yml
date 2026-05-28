@@ -29,6 +29,7 @@ jobs:
       - name: Run job scraper
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS }}
           COUNTRY_INDEED: ${{ vars.COUNTRY_INDEED }}
           IS_REMOTE: ${{ vars.IS_REMOTE }}

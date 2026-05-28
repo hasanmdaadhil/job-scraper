@@ -17,6 +17,8 @@ RESULTS_PER_KW = int(os.environ.get("RESULTS_PER_KW", "10"))
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK_URL")
 MAX_SLACK_JOBS = int(os.environ.get("MAX_SLACK_JOBS", "15"))
 HOURS_OLD = int(os.environ.get("HOURS_OLD", "26"))
+NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
+NOTION_DB_ID = "362597e1da6880c9b922000b20b90b02"  # Part Time Job Application data source
 SEEN_FILE = Path("seen_jobs.json")
 SEEN_LIMIT = 5000
 
@@ -184,6 +186,51 @@ def send_to_slack(jobs_df, total_raw: int) -> None:
         print(f"Slack error {resp.status_code}: {resp.text}")
 
 
+def add_to_notion(job) -> bool:
+    if not NOTION_TOKEN:
+        return False
+
+    title = str(job.get("title", "N/A"))[:100]
+    company = str(job.get("company", "N/A"))
+    job_url = str(job.get("job_url", "")).strip() or None
+
+    salary_str = ""
+    min_amt, max_amt = job.get("min_amount"), job.get("max_amount")
+    if pd.notna(min_amt) and pd.notna(max_amt) and min_amt and max_amt:
+        currency = job.get("currency", "")
+        salary_str = f"{currency}{int(min_amt)}–{int(max_amt)}"
+
+    props = {
+        "Company": {"title": [{"text": {"content": company}}]},
+        "Role": {"select": {"name": title}},
+        "URL": {"url": job_url},
+        "Status": {"select": {"name": "New"}},
+        "Date Applied": {"date": {"start": datetime.now().strftime("%Y-%m-%d")}},
+    }
+    if salary_str:
+        props["Salary"] = {"rich_text": [{"text": {"content": salary_str}}]}
+
+    resp = requests.post(
+        "https://api.notion.com/v1/pages",
+        headers={
+            "Authorization": f"Bearer {NOTION_TOKEN}",
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28",
+        },
+        json={"parent": {"type": "database_id", "database_id": NOTION_DB_ID}, "properties": props},
+        timeout=10,
+    )
+    return resp.status_code == 200
+
+
+def post_to_notion(jobs_df) -> None:
+    if not NOTION_TOKEN:
+        print("NOTION_TOKEN not set — skipping Notion")
+        return
+    ok = sum(add_to_notion(job) for _, job in jobs_df.iterrows())
+    print(f"Notion: added {ok}/{len(jobs_df)} rows")
+
+
 def main() -> None:
     if not SEEN_FILE.exists():
         SEEN_FILE.write_text("[]")
@@ -229,6 +276,7 @@ def main() -> None:
         return
 
     send_to_slack(new_jobs, total_raw=len(combined))
+    post_to_notion(new_jobs)
 
     seen.update(new_jobs["id"].astype(str).tolist())
     save_seen(seen)
