@@ -57,9 +57,10 @@ def build_slack_payload(jobs_df) -> dict:
         site = str(job.get("site", "")).capitalize()
 
         salary = ""
-        if job.get("min_amount") and job.get("max_amount"):
+        min_amt, max_amt = job.get("min_amount"), job.get("max_amount")
+        if pd.notna(min_amt) and pd.notna(max_amt) and min_amt and max_amt:
             currency = job.get("currency", "")
-            salary = f" · {currency}{int(job['min_amount'])}–{int(job['max_amount'])}"
+            salary = f" · {currency}{int(min_amt)}–{int(max_amt)}"
 
         title_text = f"<{url}|{title}>" if url else title
         blocks.append(
