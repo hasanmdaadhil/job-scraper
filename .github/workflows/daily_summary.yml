@@ -1,0 +1,29 @@
+name: Daily Job Summary
+
+on:
+  schedule:
+    - cron: '30 4 * * *'  # 10:00 AM IST (UTC+5:30) every day
+  workflow_dispatch:       # allows manual trigger from GitHub UI
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Send daily Notion summary to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python notion_summary.py
