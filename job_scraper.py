@@ -113,6 +113,10 @@ def scrape_site(site: str) -> pd.DataFrame:
 
 
 def main() -> None:
+    # Ensure file exists so git can always track it
+    if not SEEN_FILE.exists():
+        SEEN_FILE.write_text("[]")
+
     print(f"[{datetime.now():%Y-%m-%d %H:%M}] keywords='{KEYWORDS}' location='{LOCATION or 'any'}'")
 
     frames = [scrape_site(s) for s in ["indeed", "naukri"]]
