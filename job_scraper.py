@@ -39,6 +39,30 @@ PAID_ADS_DESCRIPTION_SIGNALS = [
     "performance marketing", "media buying", "digital advertising",
 ]
 
+# --- Hard exclusions: reject if title contains any of these ---
+EXCLUDED_TITLE_TERMS = [
+    # Seniority / experience level
+    "intern", "internship", "fresher", "freshers", "trainee", "management trainee",
+    "junior", "jr.", "entry level",
+    # Teaching / non-execution roles
+    "trainer", "faculty", "professor",
+    # Sales / advisory (not doing the ads)
+    "inside sales", "business advisor", "business development", "business analyst",
+    "growth consultant",
+    # Unrelated combo skills
+    "video editor", "graphic designer", "content writer", "copywriter",
+    "web developer", "web designer", "full stack",
+    # Manufacturing / non-digital "PPC"
+    "production planning", "ppc engineer", "ppc manager - garment",
+    "ppc manager - production",
+]
+
+# --- Manufacturing PPC: reject if title has "ppc" but description is non-digital ---
+MANUFACTURING_PPC_SIGNALS = [
+    "production planning", "inventory", "garments", "textile", "manufacturing",
+    "procurement", "supply chain", "warehouse",
+]
+
 # --- Agency signals in description: exclude if any match ---
 AGENCY_DESCRIPTION_SIGNALS = [
     "our clients", "for our clients", "for clients", "client accounts",
@@ -53,6 +77,9 @@ AGENCY_COMPANY_TERMS = [
     " agency", "media agency", "marketing agency", "digital agency",
     "advertising agency", "ad agency", "consultancy", " consulting",
     "media solutions", "marketing solutions",
+    # Additional agencies caught from DB review
+    "offshore marketers", "webconsult", "web consult", "brandclever",
+    "vsplash", "elevate media",
 ]
 
 
@@ -69,7 +96,19 @@ def save_seen(seen: set) -> None:
 def is_relevant(job) -> bool:
     title = str(job.get("title", "")).lower()
     description = str(job.get("description", "")).lower()
-    company = str(job.get("company", "")).lower()
+    company = str(job.get("company", "")).lower().strip()
+
+    # Reject jobs with no company name
+    if not company or company in ("nan", "none", "n/a", ""):
+        return False
+
+    # Hard-reject titles containing excluded terms (intern, trainer, sales, etc.)
+    if any(term in title for term in EXCLUDED_TITLE_TERMS):
+        return False
+
+    # Reject manufacturing/non-digital PPC (e.g. "PPC Manager - Garments")
+    if "ppc" in title and any(sig in description for sig in MANUFACTURING_PPC_SIGNALS):
+        return False
 
     tier1_match = any(term in title for term in RELEVANT_TITLE_TERMS)
     is_digital_marketing_title = "digital marketing" in title
@@ -83,9 +122,11 @@ def is_relevant(job) -> bool:
     else:
         return False  # not a paid ads role
 
+    # Reject if description has agency signals
     if any(signal in description for signal in AGENCY_DESCRIPTION_SIGNALS):
         return False
 
+    # Reject if company name matches agency patterns
     if any(term in company for term in AGENCY_COMPANY_TERMS):
         return False
 
