@@ -63,6 +63,28 @@ MANUFACTURING_PPC_SIGNALS = [
     "procurement", "supply chain", "warehouse",
 ]
 
+# --- Roles that require SEO or broad digital marketing as the PRIMARY responsibility ---
+# Used only for Tier-2 "digital marketing" titles: if the description shows SEO is
+# the main focus (not just a bonus), reject — user wants pure paid ads roles.
+SEO_PRIMARY_SIGNALS = [
+    "seo specialist", "seo manager", "search engine optimization",
+    "on-page seo", "off-page seo", "link building", "keyword research for seo",
+    "organic traffic", "seo audit",
+]
+
+# --- Reject if description requires languages/skills the user doesn't have ---
+DESCRIPTION_HARD_EXCLUSIONS = [
+    # Language requirements
+    "hindi mandatory", "hindi required", "must know hindi", "fluent in hindi",
+    "hindi speaking", "hindi language required", "proficiency in hindi",
+    # Amazon marketplace (different from Google/Meta paid ads)
+    "amazon ppc", "amazon ads", "amazon advertising", "amazon seller",
+    "amazon marketplace", "amazon dsp",
+    # In-person / on-site (slips through IS_REMOTE filter occasionally)
+    "work from office", "must be present", "on-site only", "office only",
+    "relocate to", "relocation required",
+]
+
 # --- Agency signals in description: exclude if any match ---
 AGENCY_DESCRIPTION_SIGNALS = [
     "our clients", "for our clients", "for clients", "client accounts",
@@ -110,6 +132,10 @@ def is_relevant(job) -> bool:
     if "ppc" in title and any(sig in description for sig in MANUFACTURING_PPC_SIGNALS):
         return False
 
+    # Reject hard description exclusions (Hindi req, Amazon PPC, in-person only)
+    if any(sig in description for sig in DESCRIPTION_HARD_EXCLUSIONS):
+        return False
+
     tier1_match = any(term in title for term in RELEVANT_TITLE_TERMS)
     is_digital_marketing_title = "digital marketing" in title
 
@@ -118,6 +144,9 @@ def is_relevant(job) -> bool:
     elif is_digital_marketing_title:
         # Accept only if description explicitly mentions paid ads work
         if not any(sig in description for sig in PAID_ADS_DESCRIPTION_SIGNALS):
+            return False
+        # Reject if SEO is the primary focus of the role (not just a bonus mention)
+        if any(sig in description for sig in SEO_PRIMARY_SIGNALS):
             return False
     else:
         return False  # not a paid ads role
