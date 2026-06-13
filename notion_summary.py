@@ -10,6 +10,7 @@ from datetime import datetime
 
 NOTION_TOKEN    = os.environ.get("NOTION_TOKEN")
 SLACK_WEBHOOK   = os.environ.get("SLACK_WEBHOOK_URL")
+NOTION_DB_ID    = "37e597e1da6880f38e03e9a18fda164b"  # Part Time Jobs v2
 NOTION_PAGE_URL = "https://www.notion.so/hasanmdaadhil/37e597e1da6880f38e03e9a18fda164b"
 
 STATUS_EMOJI = {
@@ -23,11 +24,7 @@ STATUS_EMOJI = {
 
 
 def query_all_pages() -> list:
-    """
-    Fetch every page the integration can access via /v1/search.
-    The integration is scoped only to the Part Times database, so all
-    returned pages belong to it. Pagination is handled automatically.
-    """
+    """Fetch all pages from the v2 database using the standard query endpoint."""
     if not NOTION_TOKEN:
         print("NOTION_TOKEN not set — aborting")
         return []
@@ -40,22 +37,19 @@ def query_all_pages() -> list:
 
     pages, cursor = [], None
     while True:
-        body: dict = {
-            "filter": {"property": "object", "value": "page"},
-            "page_size": 100,
-        }
+        body: dict = {"page_size": 100}
         if cursor:
             body["start_cursor"] = cursor
 
         resp = requests.post(
-            "https://api.notion.com/v1/search",
+            f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query",
             headers=headers,
             json=body,
             timeout=30,
         )
 
         if resp.status_code != 200:
-            print(f"Notion search error {resp.status_code}: {resp.text[:300]}")
+            print(f"Notion query error {resp.status_code}: {resp.text[:300]}")
             return []
 
         data = resp.json()
