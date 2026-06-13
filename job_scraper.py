@@ -62,8 +62,8 @@ OTHER REJECT CONDITIONS:
   • Manufacturing "PPC" (production planning, garments, inventory)
   • Company name is blank or "nan"
 
-When in doubt about whether a company is a brand or agency → REJECT.
-It is better to miss a job than to pass an agency role.
+When in doubt about whether a company is a brand or agency → ACCEPT.
+It is better to review a borderline job than to miss a real opportunity.
 """.strip()
 
 # ── Keyword filter (fallback when no OPENROUTER_API_KEY) ────────────────────
