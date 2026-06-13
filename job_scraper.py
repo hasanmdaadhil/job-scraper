@@ -35,23 +35,35 @@ Candidate profile:
 - Target employers: Brands that sell their OWN products or services
   (D2C, e-commerce, SaaS, retail brands, healthcare brands, hospitality, etc.)
 
-ACCEPT a job ONLY if:
-  • Running Meta Ads and/or Google Ads is the PRIMARY responsibility
-  • The employer is a brand (not an agency managing client accounts)
-  • The role is remote / work-from-home
+ACCEPT a job ONLY if ALL of these are true:
+  1. Running Meta Ads and/or Google Ads is the PRIMARY responsibility
+  2. The employer is clearly a brand — they sell their own product or service
+  3. The role is remote / work-from-home
 
 REJECT if ANY of the following apply:
-  • Agency job — the company manages ads for multiple external clients
+
+AGENCY RED FLAGS (most important — default to REJECT if unsure):
+  • Company name contains: Agency, Media, Advertising, Digital (as agency-style),
+    Technologies, Solutions, Infotech, Outsourcing, Consultants, Techminds,
+    Web Solutions, IT Solutions, Marketers — these are almost always agencies
+  • Description mentions: clients, client accounts, client campaigns, client brands,
+    manage clients, on behalf of clients, multiple clients, client portfolio
+  • Company describes itself as a "digital marketing agency", "performance agency",
+    "full-service agency", or "creative agency"
+  • If you CANNOT confirm the company sells its own product/service → REJECT
+
+OTHER REJECT CONDITIONS:
   • Intern / fresher / trainee / management trainee / junior (0–1 yr exp)
-  • Paid ads is SECONDARY — main job is SEO, social media content, video editing,
-    content creation, graphic design, or general digital marketing
-  • Sales / BDE / business development / inside sales role
-  • Role requires Hindi language proficiency
+  • Paid ads is secondary — main job is SEO, content, video editing, social media mgmt
+  • Sales / BDE / business development / inside sales
+  • Requires Hindi language
   • Amazon marketplace / Amazon PPC (not Google or Meta)
   • In-person, on-site, or relocation required
-  • Manufacturing context "PPC" (production planning, garments, inventory control)
-  • Company name is blank, "nan", or clearly a fake/placeholder listing
-  • Role is for a developer, web designer, or primarily technical position
+  • Manufacturing "PPC" (production planning, garments, inventory)
+  • Company name is blank or "nan"
+
+When in doubt about whether a company is a brand or agency → REJECT.
+It is better to miss a job than to pass an agency role.
 """.strip()
 
 # ── Keyword filter (fallback when no OPENROUTER_API_KEY) ────────────────────
@@ -94,18 +106,36 @@ DESCRIPTION_HARD_EXCLUSIONS = [
     "relocate to", "relocation required",
 ]
 AGENCY_DESCRIPTION_SIGNALS = [
+    # Explicit client references
     "our clients", "for our clients", "for clients", "client accounts",
     "manage client", "portfolio of clients", "working with clients",
     "client campaigns", "client budgets", "on behalf of clients",
     "multiple clients", "agency environment", "client-facing",
     "client servicing", "handle client", "serve clients",
+    "client acquisition", "client retention", "client portfolio",
+    "client brands", "brands we manage", "brands we work with",
+    # Agency self-identification in description
+    "digital marketing agency", "performance marketing agency",
+    "full-service agency", "full service agency", "creative agency",
+    "we are an agency", "our agency", "leading agency",
 ]
 AGENCY_COMPANY_TERMS = [
-    " agency", "media agency", "marketing agency", "digital agency",
-    "advertising agency", "ad agency", "consultancy", " consulting",
-    "media solutions", "marketing solutions",
+    # Generic agency suffixes/words
+    " agency", "agencies", "consultancy", " consulting", "outsourc",
+    "advertising", " media pvt", " media ltd", " media llp", " media private",
+    # IT/web shops that run client ad accounts
+    "infotech", "info tech", "web solution", "it solution", "tech solution",
+    "web technologies", "digital solution", " technologies pvt", " technologies ltd",
+    "techminds", "tech minds", "softech", "softtech",
+    # Known agencies from Notion DB review
     "offshore marketers", "webconsult", "web consult", "brandclever",
-    "vsplash", "elevate media",
+    "vsplash", "elevate media", "nidus advertising", "performancex",
+    "clicks bazaar", "vsynergize", "b9 solution", "dotworld",
+    "digi maniac", "triede", "triedge", "g tech web",
+    "bits and bytes", "netmaxims", "merida tech", "noviindus",
+    "idiosys", "cal digital", "xtecglobal", "vision infotech",
+    "netsterz", "third essential", "elite information",
+    "slbs marklance", "talentxplore", "fsc hr",
 ]
 
 
