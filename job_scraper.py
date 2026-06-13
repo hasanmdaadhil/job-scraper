@@ -20,7 +20,7 @@ MAX_SLACK_JOBS   = int(os.environ.get("MAX_SLACK_JOBS", "15"))
 HOURS_OLD        = int(os.environ.get("HOURS_OLD", "48"))
 NOTION_TOKEN     = os.environ.get("NOTION_TOKEN")
 OPENROUTER_KEY   = os.environ.get("OPENROUTER_API_KEY")
-NOTION_DS_ID     = "362597e1da6880c9b922000b20b90b02"
+NOTION_DS_ID     = "37e597e1da6880b8958f000b6d4cd66d"  # Part Time Jobs v2
 SEEN_FILE        = Path("seen_jobs.json")
 SEEN_LIMIT       = 5000
 LLM_MODEL        = "anthropic/claude-3-5-haiku"
@@ -301,7 +301,7 @@ def scrape_keyword(keyword: str, site: str) -> pd.DataFrame:
 
 # ── Slack ─────────────────────────────────────────────────────────────────────
 
-NOTION_PAGE_URL = "https://www.notion.so/362597e1da6880ae99bcf1b119f8ddaf"
+NOTION_PAGE_URL = "https://www.notion.so/hasanmdaadhil/37e597e1da6880f38e03e9a18fda164b"
 
 
 def build_slack_summary(notion_count: int, total_raw: int, filtered: int) -> dict:
@@ -363,9 +363,10 @@ def add_to_notion(job) -> bool:
     if not NOTION_TOKEN:
         return False
 
-    title   = str(job.get("title", "N/A"))[:100]
-    company = str(job.get("company", "N/A"))
-    job_url = str(job.get("job_url", "")).strip() or None
+    company    = str(job.get("company", "N/A"))
+    role       = str(job.get("title", "N/A"))
+    job_url    = str(job.get("job_url", "")).strip() or None
+    site       = str(job.get("site", "indeed")).title()
 
     salary_str = ""
     min_amt, max_amt = job.get("min_amount"), job.get("max_amount")
@@ -374,11 +375,12 @@ def add_to_notion(job) -> bool:
         salary_str = f"{currency}{int(min_amt)}–{int(max_amt)}"
 
     props = {
-        "Company":      {"title": [{"text": {"content": company}}]},
-        "Role":         {"select": {"name": title}},
-        "URL":          {"url": job_url},
-        "Status":       {"select": {"name": "New"}},
-        "Date Applied": {"date": {"start": datetime.now().strftime("%Y-%m-%d")}},
+        "Company":    {"title": [{"text": {"content": company}}]},
+        "Role":       {"rich_text": [{"text": {"content": role}}]},
+        "URL":        {"url": job_url},
+        "Status":     {"select": {"name": "New"}},
+        "Date Found": {"date": {"start": datetime.now().strftime("%Y-%m-%d")}},
+        "Source":     {"select": {"name": site}},
     }
     if salary_str:
         props["Salary"] = {"rich_text": [{"text": {"content": salary_str}}]}

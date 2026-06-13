@@ -10,17 +10,15 @@ from datetime import datetime
 
 NOTION_TOKEN    = os.environ.get("NOTION_TOKEN")
 SLACK_WEBHOOK   = os.environ.get("SLACK_WEBHOOK_URL")
-NOTION_PAGE_URL = "https://www.notion.so/362597e1da6880ae99bcf1b119f8ddaf"
+NOTION_PAGE_URL = "https://www.notion.so/hasanmdaadhil/37e597e1da6880f38e03e9a18fda164b"
 
-# Emoji per status — add/rename to match your Notion Status options
 STATUS_EMOJI = {
     "New":          "🆕",
     "Applied":      "📤",
-    "Interviewing": "🎯",
+    "Interview":    "🎯",
     "Offer":        "🎉",
+    "Not Applied":  "⏭️",
     "Rejected":     "❌",
-    "No Response":  "👻",
-    "Withdrawn":    "🚫",
 }
 
 
